@@ -1,0 +1,5 @@
+pystray==0.19.5
+Pillow==12.1.1
+win10toast==0.9
+plyer==2.1.0
+pyinstaller>=6.0.0
