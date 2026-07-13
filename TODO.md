@@ -62,4 +62,5 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
 ## Out of scope (noted, not attempted)
 - Cannot render tkinter on macOS / cannot run the actual dialogs — visual verification is by reasoning only.
 - Pillow-based icon rendering (`_render_face_icon`, `_build_logo_pil`) — already carefully tuned, not a dialog-surface polish.
-- Tray menu cosmetics — Windows-only native menu, noTk styling hooks.
+- Tray menu cosmetics — Windows-only native menu, no Tk styling hooks.
+- **Primary CTA palette drift (noticed during pass 5):** duration "CONFIRM" uses the bottle-green CTA trio (`_C_CTA`/`_C_CTA_H`/`_C_CTA_B`); settings "SAVE SETTINGS" falls through to the default accent trio (`_C_ACCENT`/`_C_ACCENT2`, no border). They are both described as "primary CTA in a dialog" but read as different button families. Small fix (~1 line in `_place_pill_btn` call) but a colour call, deferred as subjective.
