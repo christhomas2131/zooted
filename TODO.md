@@ -43,7 +43,7 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
       Use 20px on both sides so left/right gutters match and the panel reads balanced.
       Accept: text starts at `x=20`; toggle right edge is 20px from the dialog right edge; py_compile passes.
 
-- [ ] **8. Refresh pill button catch-light / shadow on hover**
+- [x] **8. Refresh pill button catch-light / shadow on hover**
       `_draw_pill_btn` computes hl/shd lines from the static `_fill`; on hover only the
       polygon fill swaps to `_fhov`, leaving the directional lines keyed to the old tone.
       Track the line item ids and recompute their colour on Enter/Leave.

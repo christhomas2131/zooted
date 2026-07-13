@@ -442,14 +442,17 @@ def _draw_pill_btn(cv: tk.Canvas, w: int, h: int, *,
     pts  = _rounded_poly(1, 1, w - 1, h - 1, r)
     bdr  = border if border else fill
     rect = cv.create_polygon(pts, smooth=True, fill=fill, outline=bdr, width=1)
+    hl_id = shd_id = None
     if border:
-        # Top catch-light + bottom shadow — surface directionality without gradients
+        # Top catch-light + bottom shadow — surface directionality without gradients.
+        # Held as ids so hover can recompute their colour against the new fill
+        # (otherwise the lines stay keyed to the resting tone and read as stale).
         hl  = _lerp_color(fill, "#FFFFFF", 0.14)
         shd = _lerp_color(fill, "#000000", 0.20)
-        cv.create_line(r + 3, 2,     w - r - 3, 2,     fill=hl,  width=1)
-        cv.create_line(r + 3, h - 3, w - r - 3, h - 3, fill=shd, width=1)
+        hl_id  = cv.create_line(r + 3, 2,     w - r - 3, 2,     fill=hl,  width=1)
+        shd_id = cv.create_line(r + 3, h - 3, w - r - 3, h - 3, fill=shd, width=1)
     txt  = cv.create_text(w // 2, h // 2, text=text, fill=text_fill, font=font)
-    return rect, txt
+    return rect, txt, hl_id, shd_id
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Duration card widget
@@ -671,12 +674,19 @@ def _place_pill_btn(shell: tk.Frame, W: int, y: int, text: str,
     cv = tk.Canvas(shell, width=btn_w, height=h,
                    bg=_C_BG, highlightthickness=0, cursor="hand2")
     cv.place(x=(W - btn_w) // 2, y=y)
-    rect, _ = _draw_pill_btn(cv, btn_w, h, fill=_fill, border=border,
-                             text=text, text_fill=_C_TEXT,
-                             font=("Consolas", 9, ""))
+    rect, _, hl_id, shd_id = _draw_pill_btn(cv, btn_w, h, fill=_fill, border=border,
+                                            text=text, text_fill=_C_TEXT,
+                                            font=("Consolas", 9, ""))
+
+    def _apply(fill_color: str) -> None:
+        cv.itemconfig(rect, fill=fill_color)
+        if hl_id is not None:
+            cv.itemconfig(hl_id,  fill=_lerp_color(fill_color, "#FFFFFF", 0.14))
+            cv.itemconfig(shd_id, fill=_lerp_color(fill_color, "#000000", 0.20))
+
     cv.bind("<Button-1>", lambda e: command())
-    cv.bind("<Enter>",    lambda e: cv.itemconfig(rect, fill=_fhov))
-    cv.bind("<Leave>",    lambda e: cv.itemconfig(rect, fill=_fill))
+    cv.bind("<Enter>",    lambda e: _apply(_fhov))
+    cv.bind("<Leave>",    lambda e: _apply(_fill))
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Duration / Timer dialog
