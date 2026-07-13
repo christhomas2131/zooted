@@ -793,7 +793,7 @@ def _show_duration_dialog(
                  font=(_FF, 8)).pack(side="left")
         sf.place(relx=0.5, y=VERSION_Y, anchor="n")
     else:
-        tk.Label(shell, text="zooted v1.0", bg=_C_BG, fg=_C_MUTED,
+        tk.Label(shell, text=f"zooted v{__version__}", bg=_C_BG, fg=_C_MUTED,
                  font=(_FF, 7),
                  ).place(x=0, y=VERSION_Y, width=W - 2)
 

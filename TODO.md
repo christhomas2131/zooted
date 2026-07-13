@@ -22,7 +22,7 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
       Pick one (14 — it anchors the duration dialog, which is the primary surface).
       Accept: every "ZOOTED" header label uses the same Consolas size/weight; py_compile passes.
 
-- [ ] **4. Use `__version__` for the duration dialog footer instead of hardcoded "zooted v1.0"**
+- [x] **4. Use `__version__` for the duration dialog footer instead of hardcoded "zooted v1.0"**
       Tray menu already says `Zooted v{__version__}` (1.0.0); footer says "zooted v1.0".
       Replace the literal with `zooted v{__version__}` so they stay in sync.
       Accept: footer string references `__version__`; no other "v1.0" literal remains; py_compile passes.
