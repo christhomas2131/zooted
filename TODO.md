@@ -27,7 +27,7 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
       Replace the literal with `zooted v{__version__}` so they stay in sync.
       Accept: footer string references `__version__`; no other "v1.0" literal remains; py_compile passes.
 
-- [ ] **5. Standardize primary CTA width across dialogs**
+- [x] **5. Standardize primary CTA width across dialogs**
       Duration "CONFIRM" uses `btn_w = W - 48` (full-width minus 24px side padding).
       Settings "SAVE SETTINGS" uses `btn_w = 220` (centered, leaving ~80px gutter each side).
       Make settings use the same full-width-minus-padding pattern.

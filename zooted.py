@@ -862,7 +862,7 @@ def _show_settings_dialog(
         on_save(result)
 
     _place_pill_btn(shell, W, SAVE_Y, "SAVE SETTINGS", _save,
-                    btn_w=220, h=SAVE_H)
+                    btn_w=W - 48, h=SAVE_H)
 
     cancel_lbl = tk.Label(shell, text="cancel", bg=_C_BG, fg=_C_MUTED,
                           font=(_FF, 8), cursor="hand2")
