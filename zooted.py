@@ -469,10 +469,11 @@ class _DurationCard:
         self._cv.bind("<Button-1>", self._select)
         self._cv.bind("<Enter>",    lambda e: self._set_hover(True))
         self._cv.bind("<Leave>",    lambda e: self._set_hover(False))
-        self._hover       = False
-        self._prev_sel    = False
-        self._anim_gen    = 0   # incremented to abort stale animation callbacks
-        self._initialized = False
+        self._hover          = False
+        self._prev_sel       = False
+        self._anim_gen       = 0   # incremented to abort stale animation callbacks
+        self._initialized    = False
+        self._current_border = _C_BORDER   # last settled border colour (animation start)
         variable.trace_add("write", self._redraw)
         self._redraw()
         self._initialized = True
@@ -487,24 +488,33 @@ class _DurationCard:
     def _redraw(self, *_) -> None:
         w, h = self._cw, self._ch
         self._cv.delete("all")
-        sel       = self._var.get() == self._val
-        newly_sel = sel and not self._prev_sel
+        sel = self._var.get() == self._val
 
         bg  = _C_CARD_ON if sel else (_C_CARD_HL if self._hover else _C_CARD)
         pts = _rounded_poly(1, 1, w - 1, h - 1, 2)
+        target = _C_ACCENT if sel else _C_BORDER
 
-        if sel and newly_sel and self._initialized:
-            # Draw polygon with border at _C_BORDER; animation will walk it to _C_ACCENT
-            poly = self._cv.create_polygon(pts, smooth=False, fill=bg,
-                                           outline=_C_BORDER, width=1)
-            self._anim_gen += 1
-            gen = self._anim_gen
-            self._cv.after(15, lambda: self._animate_select(1, gen, poly))
-        else:
-            # Static render — full accent border if selected, structural border otherwise
-            border = _C_ACCENT if sel else _C_BORDER
+        if not self._initialized:
+            # First paint — settle at the resting target, no animation.
+            self._current_border = target
             self._cv.create_polygon(pts, smooth=False, fill=bg,
-                                    outline=border, width=1)
+                                    outline=target, width=1)
+            self._anim_gen += 1
+        elif target != self._current_border:
+            # State changed — walk border from previous target to new target.
+            # Same 6 × 20 ms ease-out for both directions, so select and
+            # deselect read as a symmetric pair rather than a fade + a snap.
+            poly = self._cv.create_polygon(pts, smooth=False, fill=bg,
+                                           outline=self._current_border, width=1)
+            self._anim_gen += 1
+            gen   = self._anim_gen
+            start = self._current_border
+            self._current_border = target
+            self._cv.after(15, lambda: self._animate_border(1, gen, poly, start, target))
+        else:
+            # Static render — state unchanged but bg may have (hover).
+            self._cv.create_polygon(pts, smooth=False, fill=bg,
+                                    outline=target, width=1)
             self._anim_gen += 1   # abort any in-flight animation
 
         self._prev_sel = sel
@@ -519,23 +529,24 @@ class _DurationCard:
                              fill=sub_color, anchor="w",
                              font=(_FF, 8))
 
-    def _animate_select(self, step: int, gen: int, poly: int) -> None:
-        """Ease-out border colour fade _C_BORDER → _C_ACCENT — 6 frames × 20 ms = 120 ms."""
-        if gen != self._anim_gen or self._var.get() != self._val:
+    def _animate_border(self, step: int, gen: int, poly: int,
+                        c0: str, c1: str) -> None:
+        """Ease-out border colour fade c0 → c1 — 6 frames × 20 ms = 120 ms.
+
+        Used for both select and deselect; the gen token aborts any
+        in-flight animation when a newer _redraw has taken over.
+        """
+        if gen != self._anim_gen:
             return
         STEPS = 6
         eased  = 1 - (1 - min(step, STEPS) / STEPS) ** 2
-        colour = self._lerp_color(_C_BORDER, _C_ACCENT, eased)
+        colour = _lerp_color(c0, c1, eased)
         try:
             self._cv.itemconfig(poly, outline=colour)
         except tk.TclError:
             return
         if step < STEPS:
-            self._cv.after(20, lambda: self._animate_select(step + 1, gen, poly))
-
-    @staticmethod
-    def _lerp_color(c1: str, c2: str, t: float) -> str:
-        return _lerp_color(c1, c2, t)
+            self._cv.after(20, lambda: self._animate_border(step + 1, gen, poly, c0, c1))
 
     @property
     def widget(self) -> tk.Canvas:

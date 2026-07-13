@@ -49,7 +49,7 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
       Track the line item ids and recompute their colour on Enter/Leave.
       Accept: hover updates polygon fill AND both highlight/shadow lines; py_compile passes.
 
-- [ ] **9. Add symmetric deselect animation to duration cards**
+- [x] **9. Add symmetric deselect animation to duration cards**
       Selecting a card fades border `_C_BORDER → _C_ACCENT`; clicking another card snaps the
       previously-selected card's border straight back to `_C_BORDER`. Mirror the fade.
       Accept: moving selection from A to B fades A's border out over the same 6×20ms as B fades in; py_compile passes.
