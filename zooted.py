@@ -646,7 +646,7 @@ def _place_close(shell: tk.Frame, W: int, on_close: "callable") -> None:
     SZ = 18
     cv = tk.Canvas(shell, width=SZ, height=SZ,
                    bg=_C_BG, highlightthickness=0, cursor="hand2")
-    cv.place(x=W - 32, y=13)
+    cv.place(x=W - 32, y=12)   # share header baseline with ZOOTED label (y=12)
 
     def _draw(color: str) -> None:
         cv.delete("all")

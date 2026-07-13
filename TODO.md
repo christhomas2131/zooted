@@ -33,7 +33,7 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
       Make settings use the same full-width-minus-padding pattern.
       Accept: both primary CTAs use `W - 48` width with `x=24`; py_compile passes.
 
-- [ ] **6. Vertically align close button with the header label**
+- [x] **6. Vertically align close button with the header label**
       Close sits at `y=13`; settings header label sits at `y=14`. 1px misalignment.
       Move close to `y=14` to share the header baseline.
       Accept: close glyph and header label share the same `y` origin; py_compile passes.
