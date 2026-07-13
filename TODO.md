@@ -17,7 +17,7 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
       Use one surface tone for all rows, separated by 1px dividers in `_C_BORDER`.
       Accept: every settings row uses the same bg; dividers exist between rows; py_compile passes.
 
-- [ ] **3. Unify the "ZOOTED" title size across dialogs**
+- [x] **3. Unify the "ZOOTED" title size across dialogs**
       Duration dialog uses `("Consolas", 14, "")`; settings uses `("Consolas", 11, "")`.
       Pick one (14 — it anchors the duration dialog, which is the primary surface).
       Accept: every "ZOOTED" header label uses the same Consolas size/weight; py_compile passes.

@@ -737,7 +737,7 @@ def _show_duration_dialog(
     logo_lbl.place(x=(W - LOGO_W) // 2, y=LOGO_Y)
     _attach_drag(dlg, logo_lbl)
 
-    tk.Label(shell, text="ZOOTED", bg=_C_BG, fg="#F2EFE7",
+    tk.Label(shell, text="ZOOTED", bg=_C_BG, fg=_C_TEXT,
              font=("Consolas", 14, ""),
              ).place(x=0, y=TITLE_Y, width=W - 2)
 
@@ -821,9 +821,9 @@ def _show_settings_dialog(
     _place_close(shell, W, dlg.destroy)
 
     tk.Label(shell, text="ZOOTED", bg=_C_BG, fg=_C_TEXT,
-             font=("Consolas", 11, "")).place(x=14, y=14)
+             font=("Consolas", 14, "")).place(x=14, y=12)
     tk.Label(shell, text="settings", bg=_C_BG, fg=_C_SUB,
-             font=(_FF, 8)).place(x=82, y=16)
+             font=(_FF, 8)).place(x=78, y=19)
     tk.Frame(shell, bg=_C_BORDER, height=1).place(x=0, y=HEADER_H,
                                                    width=W, height=1)
 
