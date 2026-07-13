@@ -120,6 +120,27 @@ def _init_fonts() -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Type scale — semantic font roles
+# ──────────────────────────────────────────────────────────────────────────────
+# Consolas roles are fixed-family tuples, usable as-is. _FF-based roles are
+# *recipes* (size, style) resolved by _ff() at call time — that reads _FF after
+# _init_fonts() runs (post-Tk), so the family upgrade is picked up correctly
+# (a module-level tuple would have baked in the pre-init "Segoe UI" fallback).
+
+_F_TITLE = ("Consolas", 14, "")   # dialog wordmark ("ZOOTED")
+_F_CARD  = ("Consolas", 10, "")   # duration-card time value ("30 MIN")
+_F_BTN   = ("Consolas", 9,  "")   # primary CTA button label
+_F_ROW   = (10, "")               # settings row primary label
+_F_DESC  = (8,  "")               # row desc / tagline / status / cancel / subtitle
+_F_HINT  = (7,  "")               # version footer only
+
+def _ff(recipe: tuple) -> tuple:
+    """Resolve a variable-family font recipe against the runtime _FF."""
+    size, style = recipe
+    return (_FF, size, style) if style else (_FF, size)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Windows API helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -524,10 +545,10 @@ class _DurationCard:
         sub_color = _C_ACCENT if sel else _C_SUB
         self._cv.create_text(14, h // 2 - 8, text=self._label,
                              fill=lbl_color, anchor="w",
-                             font=("Consolas", 10, ""))
+                             font=_F_CARD)
         self._cv.create_text(14, h // 2 + 8, text=self._sub,
                              fill=sub_color, anchor="w",
-                             font=(_FF, 8))
+                             font=_ff(_F_DESC))
 
     def _animate_border(self, step: int, gen: int, poly: int,
                         c0: str, c1: str) -> None:
@@ -687,7 +708,7 @@ def _place_pill_btn(shell: tk.Frame, W: int, y: int, text: str,
     cv.place(x=(W - btn_w) // 2, y=y)
     rect, _, hl_id, shd_id = _draw_pill_btn(cv, btn_w, h, fill=_fill, border=border,
                                             text=text, text_fill=_C_TEXT,
-                                            font=("Consolas", 9, ""))
+                                            font=_F_BTN)
 
     def _apply(fill_color: str) -> None:
         cv.itemconfig(rect, fill=fill_color)
@@ -759,11 +780,11 @@ def _show_duration_dialog(
     _attach_drag(dlg, logo_lbl)
 
     tk.Label(shell, text="ZOOTED", bg=_C_BG, fg=_C_TEXT,
-             font=("Consolas", 14, ""),
+             font=_F_TITLE,
              ).place(x=0, y=TITLE_Y, width=W - 2)
 
     tk.Label(shell, text="quiet. persistent. present.",
-             bg=_C_BG, fg=_C_SUB, font=(_FF, 8),
+             bg=_C_BG, fg=_C_SUB, font=_ff(_F_DESC),
              ).place(x=0, y=TAGLINE_Y, width=W - 2)
 
     tk.Frame(shell, bg=_C_BORDER, height=1).place(
@@ -793,7 +814,7 @@ def _show_duration_dialog(
                     fill=_C_CTA, fill_hover=_C_CTA_H, border=_C_CTA_B)
 
     cancel_lbl = tk.Label(shell, text="cancel", bg=_C_BG, fg=_C_MUTED,
-                          font=(_FF, 8), cursor="hand2")
+                          font=_ff(_F_DESC), cursor="hand2")
     cancel_lbl.place(x=0, y=CANCEL_Y, width=W, anchor="nw")
     cancel_lbl.bind("<Button-1>", lambda e: _close())
     cancel_lbl.bind("<Enter>",    lambda e: cancel_lbl.config(fg=_C_TEXT))
@@ -811,11 +832,11 @@ def _show_duration_dialog(
                            fill=_C_ACCENT, outline="")
         dot_cv.pack(side="left")
         tk.Label(sf, text=status_str, bg=_C_BG, fg=_C_ACCENT,
-                 font=(_FF, 8)).pack(side="left")
+                 font=_ff(_F_DESC)).pack(side="left")
         sf.place(relx=0.5, y=VERSION_Y, anchor="n")
     else:
         tk.Label(shell, text=f"zooted v{__version__}", bg=_C_BG, fg=_C_MUTED,
-                 font=(_FF, 7),
+                 font=_ff(_F_HINT),
                  ).place(x=0, y=VERSION_Y, width=W - 2)
 
     dlg.focus_force()
@@ -842,9 +863,9 @@ def _show_settings_dialog(
     _place_close(shell, W, dlg.destroy)
 
     tk.Label(shell, text="ZOOTED", bg=_C_BG, fg=_C_TEXT,
-             font=("Consolas", 14, "")).place(x=14, y=12)
+             font=_F_TITLE).place(x=14, y=12)
     tk.Label(shell, text="settings", bg=_C_BG, fg=_C_SUB,
-             font=(_FF, 8)).place(x=78, y=19)
+             font=_ff(_F_DESC)).place(x=78, y=19)
     tk.Frame(shell, bg=_C_BORDER, height=1).place(x=0, y=HEADER_H,
                                                    width=W, height=1)
 
@@ -863,10 +884,10 @@ def _show_settings_dialog(
         row_frame.place(x=0, y=y, width=W, height=ROW_H)
 
         tk.Label(row_frame, text=label, bg=_C_BG, fg=_C_TEXT,
-                 font=(_FF, 10, ""), anchor="w",
+                 font=_ff(_F_ROW), anchor="w",
                  ).place(x=20, y=10)
         tk.Label(row_frame, text=desc, bg=_C_BG, fg=_C_SUB,
-                 font=(_FF, 8), anchor="w",
+                 font=_ff(_F_DESC), anchor="w",
                  ).place(x=20, y=30)
 
         toggle = _Toggle(row_frame, bv)
@@ -886,7 +907,7 @@ def _show_settings_dialog(
                     btn_w=W - 48, h=SAVE_H)
 
     cancel_lbl = tk.Label(shell, text="cancel", bg=_C_BG, fg=_C_MUTED,
-                          font=(_FF, 8), cursor="hand2")
+                          font=_ff(_F_DESC), cursor="hand2")
     cancel_lbl.place(x=0, y=CANCEL_Y, width=W, anchor="nw")
     cancel_lbl.bind("<Button-1>", lambda e: dlg.destroy())
     cancel_lbl.bind("<Enter>",    lambda e: cancel_lbl.config(fg=_C_TEXT))

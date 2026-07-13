@@ -54,7 +54,7 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
       previously-selected card's border straight back to `_C_BORDER`. Mirror the fade.
       Accept: moving selection from A to B fades A's border out over the same 6×20ms as B fades in; py_compile passes.
 
-- [ ] **10. Introduce a small named type scale and replace magic font tuples**
+- [x] **10. Introduce a small named type scale and replace magic font tuples**
        Sizes in use: 7, 8, 8, 8, 9, 10, 11, 14. Define `F_TITLE`, `F_BODY`, `F_DESC`,
        `F_META`, `F_HINT`, `F_MONO_LABEL` and use them in both dialogs.
        Accept: no raw `(family, size, ...)` literals remain in dialog code; py_compile passes.
