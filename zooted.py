@@ -706,7 +706,7 @@ def _show_duration_dialog(
     LOGO_W, LOGO_H_px = logo_pil.size
 
     LOGO_Y    = 16
-    TITLE_Y   = LOGO_Y + LOGO_H_px + 8    # tighter — portrait adheres to title
+    TITLE_Y   = LOGO_Y + LOGO_H_px + 12   # portrait→title breathing room (no divider rule)
     TAGLINE_Y = TITLE_Y + 22
     RULE_Y    = TAGLINE_Y + 22
     GRID_Y    = RULE_Y + 14
@@ -729,14 +729,13 @@ def _show_duration_dialog(
 
     _place_close(shell, W, _close)
 
-    # Logo + portrait baseline — thin structural line anchors portrait to grid
+    # Logo — portrait centre. No divider rule: portrait already reads as a unit
+    # with the title; an extra rule here crowded the title baseline.
     logo_img = ImageTk.PhotoImage(logo_pil)
     dlg._logo_ref = logo_img                        # type: ignore[attr-defined]
     logo_lbl = tk.Label(shell, image=logo_img, bg=_C_BG, bd=0)
     logo_lbl.place(x=(W - LOGO_W) // 2, y=LOGO_Y)
     _attach_drag(dlg, logo_lbl)
-    tk.Frame(shell, bg=_C_BORDER).place(
-        x=GRID_X, y=LOGO_Y + LOGO_H_px + 3, width=W - 2 * GRID_X, height=1)
 
     tk.Label(shell, text="ZOOTED", bg=_C_BG, fg="#F2EFE7",
              font=("Consolas", 14, ""),
