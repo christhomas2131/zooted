@@ -836,21 +836,25 @@ def _show_settings_dialog(
         bv      = tk.BooleanVar(value=bool(val))
         vars_[key] = bv
 
-        row_bg     = _C_CARD if i % 2 == 0 else _C_BG
-        row_frame  = tk.Frame(shell, bg=row_bg, height=ROW_H)
+        # One consistent surface for all rows — instrument-panel cohesion,
+        # not a data table. Dividers between rows carry the structure.
+        row_frame  = tk.Frame(shell, bg=_C_BG, height=ROW_H)
         row_frame.place(x=0, y=y, width=W, height=ROW_H)
 
-        tk.Label(row_frame, text=label, bg=row_bg, fg=_C_TEXT,
+        tk.Label(row_frame, text=label, bg=_C_BG, fg=_C_TEXT,
                  font=(_FF, 10, ""), anchor="w",
                  ).place(x=16, y=10)
-        tk.Label(row_frame, text=desc, bg=row_bg, fg=_C_SUB,
+        tk.Label(row_frame, text=desc, bg=_C_BG, fg=_C_SUB,
                  font=(_FF, 8), anchor="w",
                  ).place(x=16, y=30)
 
         toggle = _Toggle(row_frame, bv)
-        toggle.widget.config(bg=row_bg)
         toggle.widget.place(x=W - _Toggle.TW - 20,
                             y=(ROW_H - _Toggle.TH) // 2)
+
+        if i < len(SETTINGS_META) - 1:
+            tk.Frame(shell, bg=_C_BORDER, height=1).place(
+                x=16, y=y + ROW_H, width=W - 32, height=1)
 
     def _save() -> None:
         result = {k: v.get() for k, v in vars_.items()}

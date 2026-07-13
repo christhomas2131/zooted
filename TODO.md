@@ -12,7 +12,7 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
       Keep the single rule under the tagline; remove the rule directly under the logo.
       Accept: only one horizontal rule remains in the duration dialog header; portrait-to-title spacing is at least 10px; py_compile passes.
 
-- [ ] **2. Replace settings zebra striping with a single consistent surface + thin dividers**
+- [x] **2. Replace settings zebra striping with a single consistent surface + thin dividers**
       Alternating `_C_CARD`/`_C_BG` reads like a data table, not an instrument panel.
       Use one surface tone for all rows, separated by 1px dividers in `_C_BORDER`.
       Accept: every settings row uses the same bg; dividers exist between rows; py_compile passes.
