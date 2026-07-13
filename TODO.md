@@ -38,7 +38,7 @@ Design direction: existing "instrument panel" — warm near-black, restrained, d
       Move close to `y=14` to share the header baseline.
       Accept: close glyph and header label share the same `y` origin; py_compile passes.
 
-- [ ] **7. Symmetrize settings horizontal padding**
+- [x] **7. Symmetrize settings horizontal padding**
       Row text starts at `x=16`; toggle sits at `W - TW - 20` (20px from right edge).
       Use 20px on both sides so left/right gutters match and the panel reads balanced.
       Accept: text starts at `x=20`; toggle right edge is 20px from the dialog right edge; py_compile passes.

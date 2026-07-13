@@ -843,10 +843,10 @@ def _show_settings_dialog(
 
         tk.Label(row_frame, text=label, bg=_C_BG, fg=_C_TEXT,
                  font=(_FF, 10, ""), anchor="w",
-                 ).place(x=16, y=10)
+                 ).place(x=20, y=10)
         tk.Label(row_frame, text=desc, bg=_C_BG, fg=_C_SUB,
                  font=(_FF, 8), anchor="w",
-                 ).place(x=16, y=30)
+                 ).place(x=20, y=30)
 
         toggle = _Toggle(row_frame, bv)
         toggle.widget.place(x=W - _Toggle.TW - 20,
@@ -854,7 +854,7 @@ def _show_settings_dialog(
 
         if i < len(SETTINGS_META) - 1:
             tk.Frame(shell, bg=_C_BORDER, height=1).place(
-                x=16, y=y + ROW_H, width=W - 32, height=1)
+                x=20, y=y + ROW_H, width=W - 40, height=1)
 
     def _save() -> None:
         result = {k: v.get() for k, v in vars_.items()}
