@@ -681,7 +681,7 @@ class _DurationCard:
 # ──────────────────────────────────────────────────────────────────────────────
 
 class _Toggle:
-    TW, TH  = 36, 14   # narrow, flat — instrument panel, not consumer app
+    TW, TH  = 48, 24   # larger, legible switch on Retina displays
     _STEPS  = 7
     _FRAME  = 16        # 7 × 16ms ≈ 112ms — crisp, not sluggish
 
@@ -720,7 +720,7 @@ class _Toggle:
     def _draw(self, on: bool, kx: int) -> None:
         w, h = self.TW, self.TH
         self._cv.delete("all")
-        pts = _rounded_poly(0, 0, w, h, 3)
+        pts = _rounded_poly(0, 0, w, h, h // 2)   # full pill at any height
         self._cv.create_polygon(pts, smooth=True,
                                 fill="#172A1E" if on else _C_BG,
                                 outline=_C_ACCENT if on else _C_BORDER, width=1)
@@ -809,7 +809,7 @@ def _place_close(shell: tk.Frame, W: int, on_close: "callable") -> None:
 def _place_pill_btn(shell: tk.Frame, W: int, y: int, text: str,
                     command: "callable", btn_w: int = 0, h: int = 46,
                     fill: str = "", fill_hover: str = "",
-                    border: str = "") -> None:
+                    border: str = "", font=None) -> None:
     if btn_w == 0:
         btn_w = W - 60
     _fill = fill or _C_ACCENT
@@ -819,7 +819,7 @@ def _place_pill_btn(shell: tk.Frame, W: int, y: int, text: str,
     cv.place(x=(W - btn_w) // 2, y=y)
     rect, _, hl_id, shd_id = _draw_pill_btn(cv, btn_w, h, fill=_fill, border=border,
                                             text=text, text_fill=_C_TEXT,
-                                            font=_F_BTN)
+                                            font=font or _F_BTN)
 
     def _apply(fill_color: str) -> None:
         cv.itemconfig(rect, fill=fill_color)
@@ -1041,23 +1041,30 @@ def _show_settings_dialog(
     current_settings: dict,
     on_save: "callable[[dict], None]",
 ) -> None:
-    W        = 380
-    ROW_H    = 56
-    HEADER_H = 46
-    ROWS_Y   = HEADER_H + 6
-    SAVE_Y   = ROWS_Y + len(SETTINGS_META) * ROW_H + 14
-    SAVE_H   = 40
-    CANCEL_Y = SAVE_Y + SAVE_H + 10
-    H        = CANCEL_Y + 36
+    W        = 520
+    ROW_H    = 76
+    HEADER_H = 62
+    ROWS_Y   = HEADER_H + 12
+    SAVE_Y   = ROWS_Y + len(SETTINGS_META) * ROW_H + 18
+    SAVE_H   = 52
+    CANCEL_Y = SAVE_Y + SAVE_H + 16
+    H        = CANCEL_Y + 46
+
+    # Larger, Retina-legible type — the shared _F_ROW/_F_DESC (8-10pt) read as
+    # tiny on a Retina display, so this dialog uses its own comfortable sizes.
+    f_title = (_FM, 18, "")
+    f_sub   = (_FF, 12)
+    f_label = (_FF, 15)
+    f_desc  = (_FF, 11)
 
     dlg, shell = _make_dialog(W, H)
     _attach_drag(dlg, shell)
     _place_close(shell, W, dlg.destroy)
 
     tk.Label(shell, text="ZOOTED", bg=_C_BG, fg=_C_TEXT,
-             font=_F_TITLE).place(x=14, y=12)
+             font=f_title).place(x=24, y=20)
     tk.Label(shell, text="settings", bg=_C_BG, fg=_C_SUB,
-             font=_ff(_F_DESC)).place(x=78, y=19)
+             font=f_sub).place(x=122, y=28)
     tk.Frame(shell, bg=_C_BORDER, height=1).place(x=0, y=HEADER_H,
                                                    width=W, height=1)
 
@@ -1076,19 +1083,19 @@ def _show_settings_dialog(
         row_frame.place(x=0, y=y, width=W, height=ROW_H)
 
         tk.Label(row_frame, text=label, bg=_C_BG, fg=_C_TEXT,
-                 font=_ff(_F_ROW), anchor="w",
-                 ).place(x=20, y=10)
+                 font=f_label, anchor="w",
+                 ).place(x=28, y=18)
         tk.Label(row_frame, text=desc, bg=_C_BG, fg=_C_SUB,
-                 font=_ff(_F_DESC), anchor="w",
-                 ).place(x=20, y=30)
+                 font=f_desc, anchor="w",
+                 ).place(x=28, y=45)
 
         toggle = _Toggle(row_frame, bv)
-        toggle.widget.place(x=W - _Toggle.TW - 20,
+        toggle.widget.place(x=W - _Toggle.TW - 28,
                             y=(ROW_H - _Toggle.TH) // 2)
 
         if i < len(SETTINGS_META) - 1:
             tk.Frame(shell, bg=_C_BORDER, height=1).place(
-                x=20, y=y + ROW_H, width=W - 40, height=1)
+                x=28, y=y + ROW_H, width=W - 56, height=1)
 
     def _save() -> None:
         result = {k: v.get() for k, v in vars_.items()}
@@ -1096,10 +1103,10 @@ def _show_settings_dialog(
         on_save(result)
 
     _place_pill_btn(shell, W, SAVE_Y, "SAVE SETTINGS", _save,
-                    btn_w=W - 48, h=SAVE_H)
+                    btn_w=W - 56, h=SAVE_H, font=(_FM, 12, ""))
 
     cancel_lbl = tk.Label(shell, text="cancel", bg=_C_BG, fg=_C_SUB,
-                          font=_ff(_F_DESC), cursor="hand2")
+                          font=f_desc, cursor="hand2")
     cancel_lbl.place(x=0, y=CANCEL_Y, width=W, anchor="nw")
     cancel_lbl.bind("<Button-1>", lambda e: dlg.destroy())
     cancel_lbl.bind("<Enter>",    lambda e: cancel_lbl.config(fg=_C_TEXT))
