@@ -4,7 +4,7 @@
 
 Zooted sits in your menu bar, holds a `caffeinate` wake-lock for as long as you tell it to, then quietly steps aside. That's the whole deal.
 
-This is the macOS port of the Windows tray utility — same UI, same behavior, Mac-native plumbing underneath.
+This is the macOS port of the Windows tray utility — same UI, same behavior, Mac-native plumbing underneath. Ships as a **universal2** app: native on both Intel and Apple Silicon, no Rosetta.
 
 ---
 
@@ -36,17 +36,28 @@ This is the macOS port of the Windows tray utility — same UI, same behavior, M
 
 ## Build from source
 
-Requires **Python 3.11+** with Tk. On Homebrew Python you must install the Tk bindings separately:
+For a **universal2** build (native Intel + Apple Silicon) you need a universal2
+Python with Tk. The easiest is the official installer from
+[python.org/downloads/macos](https://www.python.org/downloads/macos/) — it's
+universal2 *and* bundles universal2 Tcl/Tk (Homebrew's Python is single-arch and
+ships no Tk). Then:
 
 ```sh
-# Homebrew Python — install Tk bindings for your version, e.g. 3.14:
-brew install python-tk@3.14
-
-# Build — creates a virtualenv, installs deps, generates the icon, builds the .app
+# Build — venv, deps (fuses Pillow to universal2), icon, and the .app.
+# build.sh auto-detects /Library/Frameworks/Python.framework/.../python3.13;
+# override with PYTHON=/path/to/universal2/python3 ./build.sh
 ./build.sh
 ```
 
-The finished bundle lands at `dist/Zooted.app`. Drag it to `/Applications` and launch it — it appears in the menu bar (no Dock icon).
+The finished bundle lands at `dist/Zooted.app` and is verified with `lipo` at the
+end. Drag it to `/Applications` and launch it — it appears in the menu bar (no
+Dock icon).
+
+> **Why the Pillow fuse?** PyPI ships Pillow as *per-architecture* wheels, so on
+> a single-arch host `pip` installs a thin Pillow. `build.sh` downloads both the
+> x86_64 and arm64 wheels and merges them into one universal2 wheel
+> (`delocate-merge`) so the whole app stays fat. On Homebrew Python (no
+> universal2), the build falls back to a single-arch `.app`.
 
 ### Run the script directly (no build)
 
@@ -61,7 +72,7 @@ python zooted.py
 
 ## Notes & gotchas
 
-- **Homebrew Python has no Tk by default.** `import tkinter` fails until `python-tk@<version>` is installed. `build.sh` checks for this and tells you.
+- **Use python.org Python for a universal2 build.** Homebrew Python is single-arch (and has no Tk), so it can only produce a thin `.app`. The python.org installer is universal2 and bundles Tk. `build.sh` warns if the interpreter isn't universal2.
 - **First notification may prompt for permission.** macOS asks whether to allow notifications; allow it to see the 5-minute and deactivation alerts.
 - **The app is unsigned.** On first launch, macOS Gatekeeper may block it — right-click → Open, or allow it under System Settings → Privacy & Security.
 
