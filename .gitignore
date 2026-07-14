@@ -5,6 +5,7 @@ dist/
 build/
 *.spec
 *.exe
+*.dmg
 .venv/
 env/
 *.log

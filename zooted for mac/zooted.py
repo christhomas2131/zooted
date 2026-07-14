@@ -1151,12 +1151,18 @@ class ZootedApp:
         logging.info("Timer loop exited (stop_event set)")
 
     def _exit(self, icon=None, item=None) -> None:
+        # Terminate the process directly instead of unwinding the event loop.
+        # On macOS the tray (pystray) shares Tk's NSApplication run loop, so
+        # icon.stop() stops that shared NSApp and _tk_root.quit() lets the
+        # interpreter finalize — which races a pending Tcl `after` timer and
+        # aborts with SIGABRT ("Zooted quit unexpectedly"). os._exit skips
+        # Py_Finalize and all teardown; the OS reclaims the menu-bar icon and
+        # the caffeinate child (started with `-w <pid>`) dies with us.
         logging.info("EXIT: user requested exit")
-        self._deactivate()
         self._stop_event.set()
-        if self._icon:
-            self._icon.stop()
-        _tk_root.after(0, _tk_root.quit)
+        self._deactivate()          # queue wake-lock release (also self-clears)
+        logging.shutdown()          # flush the log before the hard exit
+        os._exit(0)
 
     def run_tray(self) -> None:
         self._icon = pystray.Icon(
