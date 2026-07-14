@@ -1313,6 +1313,7 @@ class ZootedApp:
         logging.info("EXIT: user requested exit")
         self._stop_event.set()
         self._deactivate()          # queue wake-lock release (also self-clears)
+        _stop_song()                # afplay isn't -w-tied — stop it or it orphans
         logging.shutdown()          # flush the log before the hard exit
         os._exit(0)
 
