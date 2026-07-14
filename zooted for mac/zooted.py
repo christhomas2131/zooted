@@ -84,6 +84,13 @@ _lock_fp = None   # held open for process lifetime to retain the instance lock
 # Never destroyed; mainloop() is called twice (once for first-run, once for app).
 _tk_root: tk.Tk | None = None
 
+# Bridge from pystray menu callbacks to the Tk main thread. On macOS a menu
+# action fires re-entrantly inside Tk's Cocoa event pump, so touching Tk from
+# it (even _tk_root.after) corrupts _tkinter's thread-state and aborts. Menu
+# callbacks only enqueue a closure here; _pump_ui_queue (a plain Tk after-loop)
+# runs it on the main thread, outside the Cocoa callback.
+_ui_queue: "queue.Queue" = queue.Queue()
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Colour palette
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1225,10 +1232,12 @@ class ZootedApp:
             pystray.MenuItem(f"Zooted v{__version__}", action=None, enabled=False),
         )
 
-    # Menu callbacks post onto the Tk thread via after() — no queue needed
+    # Menu callbacks enqueue onto _ui_queue; the Tk-owned _pump_ui_queue opens
+    # the dialog on the main thread. They must NOT call Tk directly — on macOS
+    # a menu action runs re-entrantly inside Tk's Cocoa pump and would abort.
     def _request_timer(self, icon=None, item=None) -> None:
         status = self._status_label() if self._active else None
-        _tk_root.after(0, lambda: _show_duration_dialog(
+        _ui_queue.put(lambda: _show_duration_dialog(
             "Zooted — Timer",
             self.default_duration,
             self._on_prefs_saved,
@@ -1242,7 +1251,7 @@ class ZootedApp:
         _save_config_partial(default_duration_minutes=minutes)
 
     def _request_settings(self, icon=None, item=None) -> None:
-        _tk_root.after(0, lambda: _show_settings_dialog(
+        _ui_queue.put(lambda: _show_settings_dialog(
             self.settings,
             self._on_settings_saved,
         ))
@@ -1348,6 +1357,24 @@ def _setup_logging() -> None:
     root_logger.addHandler(handler)
 
 
+def _pump_ui_queue() -> None:
+    """Run queued menu requests on the Tk main thread, then reschedule.
+
+    This is an ordinary Tk after-loop (not a Cocoa callback), so opening a
+    dialog from here is safe — unlike calling Tk from a pystray menu action.
+    """
+    try:
+        while True:
+            fn = _ui_queue.get_nowait()
+            try:
+                fn()
+            except Exception:
+                logging.exception("UI task failed")
+    except queue.Empty:
+        pass
+    _tk_root.after(80, _pump_ui_queue)
+
+
 def main() -> None:
     global _tk_root, _wake_lock_queue
 
@@ -1423,7 +1450,9 @@ def main() -> None:
     app.run_tray()
     threading.Thread(target=app._timer_loop, daemon=True).start()
 
-    # ── Main event loop — processes Timer / Settings dialogs via after() ──────
+    # ── Main event loop — the poller drains menu requests (Timer / Settings) ──
+    # onto this thread so dialogs are never created from a pystray callback.
+    _pump_ui_queue()
     _tk_root.mainloop()
 
 
