@@ -16,7 +16,6 @@ import os
 import queue
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -291,66 +290,53 @@ def _notify(title: str, body: str) -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Song (afplay single-play)
+# Song (NSSound single-play)
 # ──────────────────────────────────────────────────────────────────────────────
-# macOS ships `afplay` — plays MP3/AAC/WAV/AIFF natively, no decoder deps.
-# Held by pid, stopped via terminate. Single-play (no loop): the song is the
-# duration picker's sting, not an ambient bed.
+# Play in-process via AppKit's NSSound — a pure audio-OUTPUT API. The previous
+# `afplay` subprocess made CoreAudio initialise the default audio device, whose
+# input scope tripped a spurious "Zooted wants to access the microphone" prompt
+# (afplay's device access is attributed to us). NSSound never touches input, so
+# no mic prompt. Single-play (no loop): the picker's sting, not an ambient bed.
+# The instance is held in a global so it isn't GC'd mid-playback.
 
 _SONG_VOLUME = 0.5   # 0.0..1.0 — background, not foreground. Dial to taste.
-_song_proc: subprocess.Popen | None = None
-_song_err_path = Path(tempfile.gettempdir()) / "zooted-afplay.err"
+_song_sound = None   # AppKit.NSSound while playing, else None
 
 def _start_song() -> None:
-    """Play zooted.mp3 once via afplay. No-op if the file is absent.
-
-    afplay's stderr is routed to a temp file so we can diagnose silent
-    failures — afplay sometimes returns 0 with no audio if the output
-    device can't be opened, and we'd otherwise be blind to it.
-    """
-    global _song_proc
+    """Play zooted.mp3 once via NSSound. No-op if the file/audio is unavailable."""
+    global _song_sound
     _stop_song()
     src = _get_resource("zooted.mp3")
     if not src.exists():
         logging.info("Song skipped: zooted.mp3 not found")
         return
     try:
-        err_fh = open(_song_err_path, "w")
-        _song_proc = subprocess.Popen(
-            ["afplay", "-v", str(_SONG_VOLUME), str(src)],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=err_fh,
-        )
-        err_fh.close()
-        logging.info("Song started: %s (pid=%s)", src, _song_proc.pid)
+        from AppKit import NSSound
+        snd = NSSound.alloc().initWithContentsOfFile_byReference_(str(src), True)
+        if snd is None:
+            logging.warning("Song: NSSound could not load %s", src)
+            return
+        snd.setVolume_(_SONG_VOLUME)
+        if snd.play():
+            _song_sound = snd
+            logging.info("Song started (NSSound): %s", src)
+        else:
+            logging.warning("Song: NSSound.play() returned false for %s", src)
     except Exception:
         logging.exception("Song start failed")
-        _song_proc = None
+        _song_sound = None
 
 
 def _stop_song() -> None:
-    """Stop the song if playing. Idempotent — safe to call from any teardown path.
-
-    After stopping, logs afplay's stderr if any was captured — useful for
-    diagnosing "song started but no audio" cases.
-    """
-    global _song_proc
-    if _song_proc is not None and _song_proc.poll() is None:
-        _song_proc.terminate()
+    """Stop the song if playing. Idempotent — safe from any teardown path."""
+    global _song_sound
+    if _song_sound is not None:
         try:
-            _song_proc.wait(timeout=2)
+            if _song_sound.isPlaying():
+                _song_sound.stop()
         except Exception:
-            _song_proc.kill()
-    _song_proc = None
-    # Surface any stderr afplay wrote before we killed it.
-    try:
-        if _song_err_path.exists() and _song_err_path.stat().st_size > 0:
-            err_text = _song_err_path.read_text(encoding="utf-8", errors="replace").strip()
-            if err_text:
-                logging.info("afplay stderr: %s", err_text)
-    except Exception:
-        pass
+            pass
+    _song_sound = None
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Resource helpers
