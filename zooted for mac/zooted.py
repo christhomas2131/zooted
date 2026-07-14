@@ -16,6 +16,7 @@ import os
 import queue
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -55,6 +56,8 @@ SETTINGS_DEFAULTS: dict = {
     "loop_on_expiry":            False,
     "show_notifications":        True,
     "show_duration_on_startup":  True,
+    "play_song":                 True,
+    "keep_head_stationary":       False,
 }
 
 SETTINGS_META: list[tuple[str, str, str]] = [
@@ -68,6 +71,10 @@ SETTINGS_META: list[tuple[str, str, str]] = [
      "Automatically restart the timer when it runs out"),
     ("show_notifications",       "Show Notifications",
      "Send toast alerts before and after deactivation"),
+    ("play_song",                "Play Song",
+     "Play a short tune while the duration picker is open"),
+    ("keep_head_stationary",     "Keep Head Stationary",
+     "Disable the spinning animation on the duration picker"),
 ]
 
 _SENTINEL = object()
@@ -275,6 +282,68 @@ def _notify(title: str, body: str) -> None:
         except Exception:
             pass
     threading.Thread(target=_run, daemon=True).start()
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Song (afplay single-play)
+# ──────────────────────────────────────────────────────────────────────────────
+# macOS ships `afplay` — plays MP3/AAC/WAV/AIFF natively, no decoder deps.
+# Held by pid, stopped via terminate. Single-play (no loop): the song is the
+# duration picker's sting, not an ambient bed.
+
+_SONG_VOLUME = 0.5   # 0.0..1.0 — background, not foreground. Dial to taste.
+_song_proc: subprocess.Popen | None = None
+_song_err_path = Path(tempfile.gettempdir()) / "zooted-afplay.err"
+
+def _start_song() -> None:
+    """Play zooted.mp3 once via afplay. No-op if the file is absent.
+
+    afplay's stderr is routed to a temp file so we can diagnose silent
+    failures — afplay sometimes returns 0 with no audio if the output
+    device can't be opened, and we'd otherwise be blind to it.
+    """
+    global _song_proc
+    _stop_song()
+    src = _get_resource("zooted.mp3")
+    if not src.exists():
+        logging.info("Song skipped: zooted.mp3 not found")
+        return
+    try:
+        err_fh = open(_song_err_path, "w")
+        _song_proc = subprocess.Popen(
+            ["afplay", "-v", str(_SONG_VOLUME), str(src)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=err_fh,
+        )
+        err_fh.close()
+        logging.info("Song started: %s (pid=%s)", src, _song_proc.pid)
+    except Exception:
+        logging.exception("Song start failed")
+        _song_proc = None
+
+
+def _stop_song() -> None:
+    """Stop the song if playing. Idempotent — safe to call from any teardown path.
+
+    After stopping, logs afplay's stderr if any was captured — useful for
+    diagnosing "song started but no audio" cases.
+    """
+    global _song_proc
+    if _song_proc is not None and _song_proc.poll() is None:
+        _song_proc.terminate()
+        try:
+            _song_proc.wait(timeout=2)
+        except Exception:
+            _song_proc.kill()
+    _song_proc = None
+    # Surface any stderr afplay wrote before we killed it.
+    try:
+        if _song_err_path.exists() and _song_err_path.stat().st_size > 0:
+            err_text = _song_err_path.read_text(encoding="utf-8", errors="replace").strip()
+            if err_text:
+                logging.info("afplay stderr: %s", err_text)
+    except Exception:
+        pass
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Resource helpers
@@ -727,16 +796,16 @@ def _attach_drag(dlg: tk.Toplevel, *widgets: tk.Widget) -> None:
 
 
 def _place_close(shell: tk.Frame, W: int, on_close: "callable") -> None:
-    SZ = 18
+    SZ = 22
     cv = tk.Canvas(shell, width=SZ, height=SZ,
-                   bg=_C_BG, highlightthickness=0, cursor="hand2")
-    cv.place(x=W - 32, y=12)   # share header baseline with ZOOTED label (y=12)
+                  bg=_C_BG, highlightthickness=0, cursor="hand2")
+    cv.place(x=W - SZ - 12, y=10)   # right-edge-margin 12 px, lines 2 px thick for clarity
 
     def _draw(color: str) -> None:
         cv.delete("all")
         p = 4
-        cv.create_line(p, p, SZ - p, SZ - p, fill=color, width=1)
-        cv.create_line(SZ - p, p, p, SZ - p, fill=color, width=1)
+        cv.create_line(p, p, SZ - p, SZ - p, fill=color, width=2)
+        cv.create_line(SZ - p, p, p, SZ - p, fill=color, width=2)
 
     _draw(_C_SUB)
     cv.bind("<Button-1>", lambda e: on_close())
@@ -770,6 +839,80 @@ def _place_pill_btn(shell: tk.Frame, W: int, y: int, text: str,
     cv.bind("<Leave>",    lambda e: _apply(_fill))
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Floating head — ambient bob + rotation drift + breathing + poke wiggle
+# ──────────────────────────────────────────────────────────────────────────────
+
+class _Head:
+    """Calmly spinning head portrait — slow 360° rotation, the dialog's centerpiece.
+
+    Renders a fresh rotated frame each tick at float degree precision (no
+    quantized buckets). The bounding square is the portrait diagonal, fixed
+    across all angles, so the PhotoImage dimensions never change — no label
+    resize jitter. A 360° spin visits infinite angles, so no frame cache.
+    """
+    _TARGET_W = 190        # px — head portrait body width
+    _PERIOD   = 12.0       # seconds per full revolution (~30 deg/sec)
+    _TICK_MS  = 33         # ~30 fps — smooth, not demanding
+
+    def __init__(self, parent: tk.Widget, dlg: tk.Toplevel, base: "Image.Image",
+                 *, spins: bool = True) -> None:
+        self._base  = base
+        self._alive = True
+        self._spins = spins
+        bw, bh      = base.size
+        diag        = math.ceil(math.sqrt(bw * bw + bh * bh))
+        self._FW, self._FH = diag, diag
+        self._bg_px = (*bytes.fromhex(_C_BG[1:]), 255)
+        self._cur   = None  # keeps the live PhotoImage alive against Python GC
+        self.label  = tk.Label(parent, image=self._render(0.0), bg=_C_BG, bd=0)
+        self._t0    = time.monotonic()
+
+    @staticmethod
+    def _frame_dims(bw: int, bh: int) -> tuple[int, int]:
+        """Bounding square — portrait diagonal, fixed for all rotation angles."""
+        diag = math.ceil(math.sqrt(bw * bw + bh * bh))
+        return diag, diag
+
+    def activate(self, x: int, y: int) -> None:
+        self.label.place(x=x, y=y)
+        if self._spins:
+            self._tick()
+
+    def _render(self, angle: float):
+        """Rotate base by `angle` and pad into the fixed bounding square.
+
+        Stores the new PhotoImage in self._cur so it survives until the next
+        tick — Tk only keeps the image *name* in the label config; the Python
+        PhotoImage object, if unreferenced, gets GC'd and frees the Tk-side
+        image, leaving the label blank.
+        """
+        from PIL import ImageTk
+        rotated = self._base.rotate(angle, resample=Image.BICUBIC, expand=True)
+        out = Image.new("RGBA", (self._FW, self._FH), self._bg_px)
+        out.paste(rotated, ((self._FW - rotated.width) // 2,
+                           (self._FH - rotated.height) // 2))
+        self._cur = ImageTk.PhotoImage(out)
+        return self._cur
+
+    def _tick(self) -> None:
+        if not self._alive:
+            return
+        t = time.monotonic() - self._t0
+        angle = (360.0 * t / self._PERIOD) % 360.0
+        try:
+            self.label.configure(image=self._render(angle))
+        except tk.TclError:
+            self._alive = False
+            return
+        self.label.after(self._TICK_MS, self._tick)
+
+    def stop(self) -> None:
+        self._alive = False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Duration / Timer dialog
+# ──────────────────────────────────────────────────────────────────────────────
 # Duration / Timer dialog
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -779,13 +922,13 @@ def _show_duration_dialog(
     on_save: "callable[[int | None], None]",
     _quit_after: bool = False,
     status_str: str | None = None,
+    play_song: bool = True,
+    head_spins: bool = True,
 ) -> None:
     """
     Show the timer duration picker as a Toplevel.
     _quit_after=True is used for first-time setup to exit the bootstrap mainloop.
     """
-    from PIL import ImageTk
-
     W = 380
     CARD_H, CARD_GAP = 60, 10
     GRID_X  = 24
@@ -793,8 +936,8 @@ def _show_duration_dialog(
     GRID_ROWS = math.ceil(len(DURATION_OPTIONS) / 2)
     GRID_H    = GRID_ROWS * CARD_H + (GRID_ROWS - 1) * CARD_GAP
 
-    logo_pil        = _load_logo_image(target_w=175)
-    LOGO_W, LOGO_H_px = logo_pil.size
+    head_base       = _load_logo_image(target_w=_Head._TARGET_W)
+    LOGO_W, LOGO_H_px = _Head._frame_dims(*head_base.size)
 
     LOGO_Y    = 16
     TITLE_Y   = LOGO_Y + LOGO_H_px + 12   # portrait→title breathing room (no divider rule)
@@ -813,20 +956,25 @@ def _show_duration_dialog(
     _attach_drag(dlg, shell)
 
     def _close() -> None:
+        head.stop()
+        _stop_song()
         _hide_from_taskbar()
         dlg.destroy()
         if _quit_after:
             _tk_root.quit()
 
+    # Head first — created before the close canvas so Tk's natural stacking
+    # puts the close canvas on top of the head's bounding square in the
+    # top-right corner. (Canvas.lift() operates on canvas *items*, not on
+    # sibling widgets, so the widget-lift call would crash.)
+    head = _Head(shell, dlg, head_base, spins=head_spins)
+    head.activate((W - LOGO_W) // 2, LOGO_Y)
+    _attach_drag(dlg, head.label)
+
     _place_close(shell, W, _close)
 
-    # Logo — portrait centre. No divider rule: portrait already reads as a unit
-    # with the title; an extra rule here crowded the title baseline.
-    logo_img = ImageTk.PhotoImage(logo_pil)
-    dlg._logo_ref = logo_img                        # type: ignore[attr-defined]
-    logo_lbl = tk.Label(shell, image=logo_img, bg=_C_BG, bd=0)
-    logo_lbl.place(x=(W - LOGO_W) // 2, y=LOGO_Y)
-    _attach_drag(dlg, logo_lbl)
+    if play_song:
+        _start_song()
 
     tk.Label(shell, text="ZOOTED", bg=_C_BG, fg=_C_TEXT,
              font=_F_TITLE,
@@ -852,6 +1000,8 @@ def _show_duration_dialog(
     def _confirm() -> None:
         v      = var.get()
         result = None if v == 0 else v
+        head.stop()
+        _stop_song()
         _hide_from_taskbar()
         dlg.destroy()
         if _quit_after:
@@ -862,12 +1012,12 @@ def _show_duration_dialog(
                     btn_w=W - 48, h=CONFIRM_H,
                     fill=_C_CTA, fill_hover=_C_CTA_H, border=_C_CTA_B)
 
-    cancel_lbl = tk.Label(shell, text="cancel", bg=_C_BG, fg=_C_MUTED,
+    cancel_lbl = tk.Label(shell, text="cancel", bg=_C_BG, fg=_C_SUB,
                           font=_ff(_F_DESC), cursor="hand2")
     cancel_lbl.place(x=0, y=CANCEL_Y, width=W, anchor="nw")
     cancel_lbl.bind("<Button-1>", lambda e: _close())
     cancel_lbl.bind("<Enter>",    lambda e: cancel_lbl.config(fg=_C_TEXT))
-    cancel_lbl.bind("<Leave>",    lambda e: cancel_lbl.config(fg=_C_MUTED))
+    cancel_lbl.bind("<Leave>",    lambda e: cancel_lbl.config(fg=_C_SUB))
 
     if status_str:
         # Canvas dot + status text — centered as a unit
@@ -955,12 +1105,12 @@ def _show_settings_dialog(
     _place_pill_btn(shell, W, SAVE_Y, "SAVE SETTINGS", _save,
                     btn_w=W - 48, h=SAVE_H)
 
-    cancel_lbl = tk.Label(shell, text="cancel", bg=_C_BG, fg=_C_MUTED,
+    cancel_lbl = tk.Label(shell, text="cancel", bg=_C_BG, fg=_C_SUB,
                           font=_ff(_F_DESC), cursor="hand2")
     cancel_lbl.place(x=0, y=CANCEL_Y, width=W, anchor="nw")
     cancel_lbl.bind("<Button-1>", lambda e: dlg.destroy())
     cancel_lbl.bind("<Enter>",    lambda e: cancel_lbl.config(fg=_C_TEXT))
-    cancel_lbl.bind("<Leave>",    lambda e: cancel_lbl.config(fg=_C_MUTED))
+    cancel_lbl.bind("<Leave>",    lambda e: cancel_lbl.config(fg=_C_SUB))
 
     dlg.focus_force()
 
@@ -1083,6 +1233,8 @@ class ZootedApp:
             self.default_duration,
             self._on_prefs_saved,
             status_str=status,
+            play_song=self.settings.get("play_song", True),
+            head_spins=not self.settings.get("keep_head_stationary", False),
         ))
 
     def _on_prefs_saved(self, minutes: int | None) -> None:
@@ -1241,7 +1393,9 @@ def main() -> None:
 
         default_dur = base_settings.get("default_duration_minutes", 60)
         _tk_root.after(0, lambda: _show_duration_dialog(
-            "Zooted", default_dur, _store, _quit_after=True
+            "Zooted", default_dur, _store, _quit_after=True,
+            play_song=base_settings.get("play_song", True),
+            head_spins=not base_settings.get("keep_head_stationary", False),
         ))
         _tk_root.mainloop()   # exits when dialog closes (confirm or X)
 

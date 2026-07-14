@@ -14,6 +14,7 @@ a = Analysis(
         ('icon_v2.png', '.'),
         ('zooted_head_icon_plate_1024.png', '.'),
         ('zooted_head_icon_1024.png', '.'),
+        ('zooted.mp3', '.'),
     ],
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -38,7 +39,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch=None,
+    target_arch='universal2',
     codesign_identity=None,
     entitlements_file=None,
 )
