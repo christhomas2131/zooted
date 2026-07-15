@@ -753,6 +753,20 @@ def _hide_from_taskbar() -> None:
     """No-op on macOS — dialogs are transient Toplevels; nothing to unmap."""
     pass
 
+
+def _set_dock_hidden() -> None:
+    """Remove the Dock icon (Accessory policy); keep the menu-bar item + dialogs.
+
+    Tk sets a Regular activation policy on init (Dock icon), overriding the
+    bundle's LSUIElement. Re-asserting Accessory at runtime hides it again.
+    """
+    try:
+        from AppKit import NSApplication
+        # 1 == NSApplicationActivationPolicyAccessory
+        NSApplication.sharedApplication().setActivationPolicy_(1)
+    except Exception:
+        logging.exception("could not set Accessory (Dock-hidden) policy")
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Shared dialog chrome
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1320,6 +1334,11 @@ class ZootedApp:
         os._exit(0)
 
     def run_tray(self) -> None:
+        # Menu-bar-only from here on: no Dock icon. Tk forces a "Regular"
+        # activation policy on init (overriding Info.plist LSUIElement), so we
+        # re-assert "Accessory" (=1) once the picker is done — this dynamically
+        # removes the Dock icon while keeping the status-bar item and dialogs.
+        _set_dock_hidden()
         self._icon = pystray.Icon(
             name="Zooted",
             icon=_make_icon_image(self._active),
